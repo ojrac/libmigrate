@@ -3,7 +3,6 @@ package libmigrate
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -36,6 +35,13 @@ func (t ParamType) getFunc() (paramFunc, error) {
 type migration struct {
 	Version int
 	Name    string
+	HasUp   bool
+	HasDown bool
+}
+
+type dbMigration struct {
+	Version int
+	Name    string
 }
 
 func (m migration) Filename(isUp bool) string {
@@ -57,12 +63,12 @@ func (m *migrator) listMigrations(ctx context.Context) (result []migration, err 
 }
 
 func (m *migrator) filenamesToMigrations(ctx context.Context, names []string) (result []migration, err error) {
-	upList := make([]migration, 0, len(names))
-	downList := make([]migration, 0, len(names))
+	migrationsByVersion := make(map[int]migration, len(names)/2)
+
 	for _, s := range names {
 		up := strings.HasSuffix(s, ".up.sql")
 		down := strings.HasSuffix(s, ".down.sql")
-		if !up && !down {
+		if !up && !down || up == down {
 			continue
 		}
 
@@ -84,60 +90,74 @@ func (m *migrator) filenamesToMigrations(ctx context.Context, names []string) (r
 			name = strings.TrimSuffix(name, ".down.sql")
 		}
 
-		if up {
-			upList = append(upList, migration{
+		if m, ok := migrationsByVersion[version]; !ok {
+			migrationsByVersion[version] = migration{
 				Version: version,
 				Name:    name,
-			})
+				HasUp:   up,
+				HasDown: down,
+			}
+		} else if m.Name != name {
+			var upName, downName string
+			if up {
+				upName = name
+				downName = m.Name
+			} else {
+				upName = m.Name
+				downName = name
+			}
+
+			err = &migrationNameMismatchError{
+				version:  version,
+				upName:   upName,
+				downName: downName,
+			}
+			return
 		} else {
-			downList = append(downList, migration{
-				Version: version,
-				Name:    name,
-			})
+			if up {
+				m.HasUp = true
+			} else {
+				m.HasDown = true
+			}
+			migrationsByVersion[version] = m
 		}
 	}
 
-	sort.Slice(upList, func(i, j int) bool { return upList[i].Version < upList[j].Version })
-	sort.Slice(downList, func(i, j int) bool { return downList[i].Version < downList[j].Version })
-
-	err = validateMigrationList(true, upList, downList)
-	if err == nil {
-		err = validateMigrationList(false, downList, upList)
-	}
-	if err != nil {
-		return nil, err
-	}
-	err = validateMigrationListsMatch(upList, downList)
+	err = validateMigrations(true, migrationsByVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	err = m.testForUnknownMigrations(ctx, upList)
+	err = m.testForUnknownMigrations(ctx, migrationsByVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	result = upList
-
-	return result, nil
+	// At this point, we've checked that migrationsByVersion has migrations
+	// from 1 to N, so we can directly write to result[i].
+	result = make([]migration, len(migrationsByVersion))
+	for version, m := range migrationsByVersion {
+		result[version-1] = m
+	}
+	return
 }
 
-func (m *migrator) testForUnknownMigrations(ctx context.Context, migrations []migration) (err error) {
+func (m *migrator) testForUnknownMigrations(ctx context.Context, migrations map[int]migration) (err error) {
 	dbMigrations, err := m.db.ListMigrations(ctx)
 
 	for _, dbMigration := range dbMigrations {
-		if dbMigration.Version > len(migrations) {
+		fsMigration, ok := migrations[dbMigration.Version]
+		if !ok {
 			return &filesystemMissingDbMigrationError{
 				version: dbMigration.Version,
 			}
 		}
 
-		migration := migrations[dbMigration.Version-1]
-		if migration != dbMigration {
+		if fsMigration.Name != dbMigration.Name {
 			return &filesystemMigrationMismatchError{
 				version:        dbMigration.Version,
 				dbName:         dbMigration.Name,
-				filesystemName: migration.Name,
+				filesystemName: fsMigration.Name,
 			}
 		}
 	}
@@ -145,51 +165,20 @@ func (m *migrator) testForUnknownMigrations(ctx context.Context, migrations []mi
 	return nil
 }
 
-func validateMigrationListsMatch(upList, downList []migration) error {
-	if len(upList) != len(downList) {
-		isUp := len(upList) < len(downList)
-		var number int
-		if isUp {
-			number = len(upList) + 1
-		} else {
-			number = len(downList) + 1
-		}
-		return &missingMigrationError{
-			number: number,
-			isUp:   isUp,
-		}
-	}
+func validateMigrations(isUp bool, migrations map[int]migration) error {
+	for i := 0; i < len(migrations); i++ {
+		version := i + 1
 
-	for i, upMigration := range upList {
-		downMigration := downList[i]
-		if upMigration.Name != downMigration.Name {
-			return &migrationNameMismatchError{
-				version:  upMigration.Version,
-				upName:   upMigration.Name,
-				downName: downMigration.Name,
-			}
-		}
-	}
-
-	return nil
-}
-
-func validateMigrationList(isUp bool, migrations, otherDirection []migration) error {
-	for i, migration := range migrations {
-		idx := i + 1
-		if idx != migration.Version {
+		// Missing "up" migrations is a fatal error; missing down migrations
+		// are only an error if you need to run them.
+		migration, ok := migrations[version]
+		if !ok || !migration.HasUp {
 			return &missingMigrationError{
-				number: idx,
-				isUp:   isUp,
+				version: version,
+				isUp:    true,
 			}
 		}
 
-		if i >= len(otherDirection) {
-			return &missingMigrationError{
-				number: idx,
-				isUp:   !isUp,
-			}
-		}
 	}
 
 	return nil
@@ -206,6 +195,13 @@ func (m *migrator) useTx(sql string) bool {
 }
 
 func (m *migrator) internalMigrate(ctx context.Context, migration migration, isUp bool) (err error) {
+	if (isUp && !migration.HasUp) || (!isUp && !migration.HasDown) {
+		return &missingMigrationError{
+			version: migration.Version,
+			isUp:    isUp,
+		}
+	}
+
 	note := "+"
 	if !isUp {
 		note = "-"

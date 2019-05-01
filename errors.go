@@ -58,8 +58,8 @@ func (e *badMigrationFilenameError) BadFilename() string { return e.filename }
 func (e *badMigrationFilenameError) Cause() error        { return e.cause }
 
 type missingMigrationError struct {
-	number int
-	isUp   bool
+	version int
+	isUp    bool
 }
 
 func (e *missingMigrationError) Error() string {
@@ -68,11 +68,11 @@ func (e *missingMigrationError) Error() string {
 		direction = "up"
 	}
 	return fmt.Sprintf(
-		"Missing %s migration %d", direction, e.number)
+		"Missing %s migration %d", direction, e.version)
 }
 
-func (e *missingMigrationError) MigrationNumber() int { return e.number }
-func (e *missingMigrationError) IsUp() bool           { return e.isUp }
+func (e *missingMigrationError) MigrationVersion() int { return e.version }
+func (e *missingMigrationError) IsUp() bool            { return e.isUp }
 
 type badVersionError struct {
 	version int

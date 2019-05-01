@@ -8,8 +8,8 @@ import (
 func Fixture(t *testing.T) (*migrator, *dbMock, *fsMock) {
 	db := &dbMock{
 		requireSchema: func(ctx context.Context) error { return nil },
-		listMigrations: func(ctx context.Context) ([]migration, error) {
-			return []migration{}, nil
+		listMigrations: func(ctx context.Context) ([]dbMigration, error) {
+			return []dbMigration{}, nil
 		},
 	}
 	fs := &fsMock{
@@ -35,7 +35,7 @@ func Fixture(t *testing.T) (*migrator, *dbMock, *fsMock) {
 type dbMock struct {
 	applyMigration func(ctx context.Context, useTx, isUp bool, version int, name, query string) error
 	requireSchema  func(ctx context.Context) error
-	listMigrations func(ctx context.Context) ([]migration, error)
+	listMigrations func(ctx context.Context) ([]dbMigration, error)
 	getVersion     func(ctx context.Context) (int, error)
 }
 
@@ -46,7 +46,7 @@ func (m dbMock) RequireSchema(ctx context.Context) error {
 	return m.requireSchema(ctx)
 }
 
-func (m dbMock) ListMigrations(ctx context.Context) ([]migration, error) {
+func (m dbMock) ListMigrations(ctx context.Context) ([]dbMigration, error) {
 	return m.listMigrations(ctx)
 }
 

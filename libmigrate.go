@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// If your migration must run outside a transaction, the first line must match
+// this constant. (Useful for migrations like PostgreSQL "CREATE INDEX
+// CONCURRENTLY" statements.)
 const NoTransactionPrefix = "-- migrate: no-transaction\n"
 
 type Migrator interface {
@@ -18,8 +21,8 @@ type Migrator interface {
 }
 
 // Different databases use different syntax for indicating parameter values.
-// Since sqlx hasn't found a better way than naming each one, we probably won't
-// either.
+// Since jmoiron/sqlx hasn't found a better way than naming each one, we
+// probably won't either. Leave it to the caller.
 type ParamType int
 
 const (
@@ -27,6 +30,7 @@ const (
 	ParamTypeDollarSign
 )
 
+// New() accepts a *database/sql.DB or equivalent.
 type DB interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)

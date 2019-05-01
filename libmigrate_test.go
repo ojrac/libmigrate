@@ -54,43 +54,10 @@ func TestFilename(t *testing.T) {
 	}
 }
 
-func TestDirectoriesToMigrations(t *testing.T) {
-	db := dbMock{
-		listMigrations: func(ctx context.Context) ([]migration, error) {
-			return []migration{
-				{Version: 1, Name: "first"},
-				{Version: 2, Name: "second"},
-			}, nil
-		},
-	}
-	migrator := &migrator{db: db}
-	result, err := migrator.filenamesToMigrations(context.Background(), []string{
-		"0002_second.up.sql",
-		"ignored",
-		"0001_first.down.sql",
-		"0001_ignored.sql",
-		"0002_second.down.sql",
-		"9999_asfjkgsdhsl.up.txt",
-		"0001_first.up.sql",
-	})
-	require.NoError(t, err)
-
-	require.Equal(t, []migration{
-		migration{
-			Version: 1,
-			Name:    "first",
-		},
-		migration{
-			Version: 2,
-			Name:    "second",
-		},
-	}, result)
-}
-
 func TestDirectoriesToMigrationsDbDisagrees(t *testing.T) {
 	db := dbMock{
-		listMigrations: func(ctx context.Context) ([]migration, error) {
-			return []migration{
+		listMigrations: func(ctx context.Context) ([]dbMigration, error) {
+			return []dbMigration{
 				{Version: 1, Name: "first"},
 			}, nil
 		},
@@ -110,8 +77,8 @@ func TestDirectoriesToMigrationsDbDisagrees(t *testing.T) {
 
 func TestDirectoriesToMigrationsTooManyInDb(t *testing.T) {
 	db := dbMock{
-		listMigrations: func(ctx context.Context) ([]migration, error) {
-			return []migration{
+		listMigrations: func(ctx context.Context) ([]dbMigration, error) {
+			return []dbMigration{
 				{Version: 1, Name: "first"},
 				{Version: 2, Name: "second"},
 			}, nil
@@ -128,26 +95,12 @@ func TestDirectoriesToMigrationsTooManyInDb(t *testing.T) {
 	})
 }
 
-func TestDirectoriesToMigrationsMismatchedNames(t *testing.T) {
-	m, _, _ := Fixture(t)
-	_, err := m.filenamesToMigrations(context.Background(), []string{
-		"0001_name_a.up.sql",
-		"0001_name_b.down.sql",
-	})
-
-	require.Equal(t, err, &migrationNameMismatchError{
-		version:  1,
-		upName:   "name_a",
-		downName: "name_b",
-	})
-}
-
 func TestMigrateLatest(t *testing.T) {
 	calledGetVersion := false
 	dbVersion := 1
 	m, db, fs := Fixture(t)
-	db.listMigrations = func(ctx context.Context) ([]migration, error) {
-		return []migration{
+	db.listMigrations = func(ctx context.Context) ([]dbMigration, error) {
+		return []dbMigration{
 			{Version: 1, Name: "v1"},
 		}, nil
 	}
@@ -184,8 +137,8 @@ func TestMigrateLatest(t *testing.T) {
 func TestMigrateToUp(t *testing.T) {
 	calledGetVersion := false
 	m, db, _ := Fixture(t)
-	db.listMigrations = func(ctx context.Context) ([]migration, error) {
-		return []migration{
+	db.listMigrations = func(ctx context.Context) ([]dbMigration, error) {
+		return []dbMigration{
 			{Version: 1, Name: "v1"},
 		}, nil
 	}
@@ -222,6 +175,41 @@ func TestMigrateToDown(t *testing.T) {
 
 	err := m.MigrateTo(context.Background(), 0)
 	require.NoError(t, err)
+}
+
+func TestMigrateToDownMissing(t *testing.T) {
+	calledGetVersion := false
+	m, db, fs := Fixture(t)
+	fs.listMigrationDir = func() ([]string, error) {
+		return []string{
+			"0001_v1.up.sql",
+			"0002_v2.up.sql",
+			"0002_v2.down.sql",
+		}, nil
+	}
+
+	db.getVersion = func(ctx context.Context) (version int, err error) {
+		require.False(t, calledGetVersion)
+		calledGetVersion = true
+		return 2, nil
+	}
+
+	// Should call apply once (at version 2), then error
+	applyCalled := false
+	db.applyMigration = func(ctx context.Context, useTx, isUp bool, version int, name, query string) error {
+		applyCalled = true
+		require.False(t, isUp)
+		require.Equal(t, 2, version)
+		require.Equal(t, fmt.Sprintf("v%d", version), name)
+		return nil
+	}
+
+	err := m.MigrateTo(context.Background(), 0)
+	require.Equal(t, &missingMigrationError{
+		isUp:    false,
+		version: 1,
+	}, err)
+	require.True(t, applyCalled)
 }
 
 func TestHasPendingTrue(t *testing.T) {

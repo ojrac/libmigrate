@@ -9,7 +9,7 @@ import (
 type dbWrapper interface {
 	ApplyMigration(ctx context.Context, useTx, isUp bool, version int, name, query string) error
 	RequireSchema(ctx context.Context) error
-	ListMigrations(ctx context.Context) ([]migration, error)
+	ListMigrations(ctx context.Context) ([]dbMigration, error)
 	GetVersion(ctx context.Context) (int, error)
 }
 
@@ -78,7 +78,7 @@ func (w *dbWrapperImpl) RequireSchema(ctx context.Context) error {
 	return err
 }
 
-func (w *dbWrapperImpl) ListMigrations(ctx context.Context) (result []migration, err error) {
+func (w *dbWrapperImpl) ListMigrations(ctx context.Context) (result []dbMigration, err error) {
 	rows, err := w.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT version, name
 		  FROM "%s"
@@ -90,7 +90,7 @@ func (w *dbWrapperImpl) ListMigrations(ctx context.Context) (result []migration,
 	defer rows.Close()
 
 	for rows.Next() {
-		var m migration
+		var m dbMigration
 		err = rows.Scan(&m.Version, &m.Name)
 		if err != nil {
 			return
