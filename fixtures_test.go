@@ -27,8 +27,9 @@ func Fixture(t *testing.T) (*migrator, *dbMock, *fsMock) {
 	}
 
 	return &migrator{
-		db:         db,
-		filesystem: fs,
+		db:           db,
+		filesystem:   fs,
+		outputWriter: nil,
 	}, db, fs
 }
 

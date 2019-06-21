@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
 	"time"
 )
 
@@ -22,6 +24,9 @@ type Migrator interface {
 	SetTableName(name string)
 	// If set, "table" becomes schema."table"
 	SetTableSchema(schema string)
+
+	// Set to nil to disable output. Default: os.Stdout
+	SetOutputWriter(io.Writer)
 }
 
 // Different databases use different syntax for indicating parameter values.
@@ -54,6 +59,7 @@ func New(db DB, migrationDir string, paramType ParamType) Migrator {
 			migrationDir: migrationDir,
 		},
 		disableTransactions: false,
+		outputWriter:        os.Stdout,
 	}
 }
 
@@ -63,6 +69,10 @@ func (m *migrator) SetTableName(name string) {
 
 func (m *migrator) SetTableSchema(schema string) {
 	m.db.SetTableSchema(schema)
+}
+
+func (m *migrator) SetOutputWriter(writer io.Writer) {
+	m.outputWriter = writer
 }
 
 func (m *migrator) MigrateLatest(ctx context.Context) (err error) {
@@ -89,11 +99,11 @@ func (m *migrator) MigrateTo(ctx context.Context, version int) (err error) {
 	if err != nil {
 		return
 	}
-	fmt.Printf("Migrating from %d to %d\n", currVersion, version)
+	m.printf("Migrating from %d to %d\n", currVersion, version)
 	start := time.Now()
 	defer func() {
 		if err == nil {
-			fmt.Printf("Finished in %v\n", time.Since(start))
+			m.printf("Finished in %v\n", time.Since(start))
 		}
 	}()
 	if version == currVersion {
@@ -184,10 +194,10 @@ func (m *migrator) Create(ctx context.Context, name string) (err error) {
 
 	path, err := m.filesystem.CreateFile(next, name, "up")
 	if err == nil {
-		fmt.Printf(" Created %s\n", path)
+		m.printf(" Created %s\n", path)
 		path, err = m.filesystem.CreateFile(next, name, "down")
 		if err == nil {
-			fmt.Printf(" Created %s\n", path)
+			m.printf(" Created %s\n", path)
 		}
 	}
 

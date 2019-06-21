@@ -3,6 +3,7 @@ package libmigrate
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -13,6 +14,15 @@ type migrator struct {
 	db                  dbWrapper
 	filesystem          filesystemWrapper
 	disableTransactions bool
+	outputWriter        io.Writer
+}
+
+func (m *migrator) printf(format string, a ...interface{}) {
+	if m.outputWriter == nil {
+		return
+	}
+
+	fmt.Fprintf(m.outputWriter, format, a...)
 }
 
 type paramFunc func() string
@@ -206,7 +216,7 @@ func (m *migrator) internalMigrate(ctx context.Context, migration migration, isU
 	if !isUp {
 		note = "-"
 	}
-	fmt.Printf(" %s %s\n", note, migration.Filename(isUp))
+	m.printf(" %s %s\n", note, migration.Filename(isUp))
 
 	sqlString, err := m.filesystem.ReadMigration(migration.Filename(isUp))
 	if err != nil {
