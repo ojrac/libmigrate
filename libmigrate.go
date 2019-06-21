@@ -71,11 +71,12 @@ func (m *migrator) MigrateLatest(ctx context.Context) (err error) {
 		return
 	}
 
-	if len(migrations) == 0 {
-		return nil
+	toVersion := 0
+	if len(migrations) > 0 {
+		toVersion = migrations[len(migrations)-1].Version
 	}
 
-	return m.MigrateTo(ctx, migrations[len(migrations)-1].Version)
+	return m.MigrateTo(ctx, toVersion)
 }
 
 func (m *migrator) MigrateTo(ctx context.Context, version int) (err error) {
