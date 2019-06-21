@@ -182,9 +182,13 @@ func (m *migrator) Create(ctx context.Context, name string) (err error) {
 		}
 	}
 
-	err = m.filesystem.CreateFile(next, name, "up")
+	path, err := m.filesystem.CreateFile(next, name, "up")
 	if err == nil {
-		err = m.filesystem.CreateFile(next, name, "down")
+		fmt.Printf(" Created %s\n", path)
+		path, err = m.filesystem.CreateFile(next, name, "down")
+		if err == nil {
+			fmt.Printf(" Created %s\n", path)
+		}
 	}
 
 	return

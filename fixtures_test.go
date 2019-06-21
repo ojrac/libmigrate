@@ -61,13 +61,13 @@ func (m dbMock) SetTableSchema(schema string) {
 }
 
 type fsMock struct {
-	createFile         func(version int, name, direction string) error
+	createFile         func(version int, name, direction string) (string, error)
 	ensureMigrationDir func() error
 	listMigrationDir   func() ([]string, error)
 	readMigration      func(filename string) (string, error)
 }
 
-func (m fsMock) CreateFile(version int, name, direction string) error {
+func (m fsMock) CreateFile(version int, name, direction string) (string, error) {
 	return m.createFile(version, name, direction)
 }
 func (m fsMock) EnsureMigrationDir() error {

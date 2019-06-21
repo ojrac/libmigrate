@@ -8,7 +8,7 @@ import (
 )
 
 type filesystemWrapper interface {
-	CreateFile(version int, name, direction string) error
+	CreateFile(version int, name, direction string) (filePath string, err error)
 	EnsureMigrationDir() error
 	ListMigrationDir() ([]string, error)
 	ReadMigration(filename string) (string, error)
@@ -29,15 +29,19 @@ func (w *filesystemWrapperImpl) ListMigrationDir() (names []string, err error) {
 	return
 }
 
-func (w *filesystemWrapperImpl) CreateFile(version int, name, direction string) error {
+func (w *filesystemWrapperImpl) CreateFile(version int, name, direction string) (filePath string, err error) {
 	fname := path.Join(w.migrationDir, fmt.Sprintf(filenameFmt, version, name, direction))
 
 	f, err := os.Create(fname)
 	if err != nil {
-		return err
+		return
 	}
 
-	return f.Close()
+	err = f.Close()
+	if err == nil {
+		filePath = path.Clean(fname)
+	}
+	return
 }
 
 func (w *filesystemWrapperImpl) EnsureMigrationDir() error {

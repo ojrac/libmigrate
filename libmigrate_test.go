@@ -237,12 +237,12 @@ func TestHasPendingFalse(t *testing.T) {
 func TestCreate(t *testing.T) {
 	calledCreateFile := make(map[string]bool)
 	m, _, fs := Fixture(t)
-	fs.createFile = func(version int, name, direction string) error {
+	fs.createFile = func(version int, name, direction string) (string, error) {
 		require.Equal(t, 4, version)
 		require.Equal(t, "asdff", name)
 
 		calledCreateFile[direction] = true
-		return nil
+		return "testpath", nil
 	}
 
 	err := m.Create(context.Background(), "asdff")
