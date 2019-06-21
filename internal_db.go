@@ -11,16 +11,28 @@ type dbWrapper interface {
 	RequireSchema(ctx context.Context) error
 	ListMigrations(ctx context.Context) ([]dbMigration, error)
 	GetVersion(ctx context.Context) (int, error)
+
+	SetTableName(name string)
+	SetTableSchema(schema string)
 }
 
 type dbWrapperImpl struct {
-	db        DB
-	paramType ParamType
-	tableName string
+	db          DB
+	paramType   ParamType
+	tableSchema string
+	tableName   string
 }
 
 type dbOrTx interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+func (db *dbWrapperImpl) SetTableName(name string) {
+	db.tableName = name
+}
+
+func (db *dbWrapperImpl) SetTableSchema(schema string) {
+	db.tableSchema = schema
 }
 
 func (w *dbWrapperImpl) ApplyMigration(ctx context.Context, useTx, isUp bool, version int, name, query string) (err error) {
@@ -53,17 +65,17 @@ func (w *dbWrapperImpl) ApplyMigration(ctx context.Context, useTx, isUp bool, ve
 	}
 	if isUp {
 		_, err = db.ExecContext(ctx, fmt.Sprintf(`
-			INSERT INTO "%s"
+			INSERT INTO %s
 						(version, name)
 				 VALUES (%s, %s)
-		`, w.tableName, paramFunc(), paramFunc()),
+		`, w.fullTableName(), paramFunc(), paramFunc()),
 			version, name)
 	} else {
 		_, err = db.ExecContext(ctx, fmt.Sprintf(`
-			DELETE FROM "%s"
+			DELETE FROM %s
 				  WHERE version = %s
 						AND name = %s
-		`, w.tableName, paramFunc(), paramFunc()),
+		`, w.fullTableName(), paramFunc(), paramFunc()),
 			version, name)
 	}
 	return err
@@ -71,19 +83,19 @@ func (w *dbWrapperImpl) ApplyMigration(ctx context.Context, useTx, isUp bool, ve
 
 func (w *dbWrapperImpl) RequireSchema(ctx context.Context) error {
 	_, err := w.db.ExecContext(ctx, fmt.Sprintf(`
-	CREATE TABLE IF NOT EXISTS "%s" (
+	CREATE TABLE IF NOT EXISTS %s (
 		version integer PRIMARY KEY NOT NULL,
 		name text NOT NULL
-	);`, w.tableName))
+	);`, w.fullTableName()))
 	return err
 }
 
 func (w *dbWrapperImpl) ListMigrations(ctx context.Context) (result []dbMigration, err error) {
 	rows, err := w.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT version, name
-		  FROM "%s"
+		  FROM %s
 	  ORDER BY version ASC
-	`, w.tableName))
+	`, w.fullTableName()))
 	if err != nil {
 		return
 	}
@@ -105,7 +117,15 @@ func (w *dbWrapperImpl) ListMigrations(ctx context.Context) (result []dbMigratio
 func (w *dbWrapperImpl) GetVersion(ctx context.Context) (version int, err error) {
 	err = w.db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT coalesce(max(version), 0)
-		  FROM "%s"
-		  `, w.tableName)).Scan(&version)
+		  FROM %s
+		  `, w.fullTableName())).Scan(&version)
 	return
+}
+
+func (w *dbWrapperImpl) fullTableName() string {
+	if w.tableSchema != "" {
+		return fmt.Sprintf("%s.\"%s\"", w.tableSchema, w.tableName)
+	}
+
+	return fmt.Sprintf("\"%s\"", w.tableName)
 }

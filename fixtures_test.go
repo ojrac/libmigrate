@@ -37,6 +37,8 @@ type dbMock struct {
 	requireSchema  func(ctx context.Context) error
 	listMigrations func(ctx context.Context) ([]dbMigration, error)
 	getVersion     func(ctx context.Context) (int, error)
+	setTableName   func(name string)
+	setTableSchema func(schema string)
 }
 
 func (m dbMock) ApplyMigration(ctx context.Context, useTx, isUp bool, version int, name, query string) error {
@@ -45,13 +47,17 @@ func (m dbMock) ApplyMigration(ctx context.Context, useTx, isUp bool, version in
 func (m dbMock) RequireSchema(ctx context.Context) error {
 	return m.requireSchema(ctx)
 }
-
 func (m dbMock) ListMigrations(ctx context.Context) ([]dbMigration, error) {
 	return m.listMigrations(ctx)
 }
-
 func (m dbMock) GetVersion(ctx context.Context) (int, error) {
 	return m.getVersion(ctx)
+}
+func (m dbMock) SetTableName(name string) {
+	m.setTableName(name)
+}
+func (m dbMock) SetTableSchema(schema string) {
+	m.setTableSchema(schema)
 }
 
 type fsMock struct {

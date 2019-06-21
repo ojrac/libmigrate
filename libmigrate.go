@@ -18,6 +18,10 @@ type Migrator interface {
 	GetVersion(ctx context.Context) (int, error)
 	HasPending(ctx context.Context) (bool, error)
 	Create(ctx context.Context, name string) error
+
+	SetTableName(name string)
+	// If set, "table" becomes schema."table"
+	SetTableSchema(schema string)
 }
 
 // Different databases use different syntax for indicating parameter values.
@@ -41,15 +45,24 @@ type DB interface {
 func New(db DB, migrationDir string, paramType ParamType) Migrator {
 	return &migrator{
 		db: &dbWrapperImpl{
-			db:        db,
-			tableName: "migration_version",
-			paramType: paramType,
+			db:          db,
+			tableSchema: "",
+			tableName:   "migration_version",
+			paramType:   paramType,
 		},
 		filesystem: &filesystemWrapperImpl{
 			migrationDir: migrationDir,
 		},
 		disableTransactions: false,
 	}
+}
+
+func (m *migrator) SetTableName(name string) {
+	m.db.SetTableName(name)
+}
+
+func (m *migrator) SetTableSchema(schema string) {
+	m.db.SetTableSchema(schema)
 }
 
 func (m *migrator) MigrateLatest(ctx context.Context) (err error) {
