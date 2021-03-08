@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"time"
 )
@@ -48,6 +49,15 @@ type DB interface {
 }
 
 func New(db DB, migrationDir string, paramType ParamType) Migrator {
+	return internalNew(db, os.DirFS(migrationDir), migrationDir, paramType)
+}
+
+func NewFs(db DB, fs fs.FS, paramType ParamType) Migrator {
+	return internalNew(db, fs, "", paramType)
+}
+
+// Only pass migrationDir if it's intended to be writeable
+func internalNew(db DB, fs fs.FS, migrationDir string, paramType ParamType) *migrator {
 	return &migrator{
 		db: &dbWrapperImpl{
 			db:          db,
@@ -57,6 +67,7 @@ func New(db DB, migrationDir string, paramType ParamType) Migrator {
 		},
 		filesystem: &filesystemWrapperImpl{
 			migrationDir: migrationDir,
+			fsys:         fs,
 		},
 		disableTransactions: false,
 		outputWriter:        os.Stdout,

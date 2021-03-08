@@ -1,10 +1,16 @@
 package libmigrate
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
+)
+
+var (
+	ErrFsNotWriteable = fmt.Errorf("Migration filesystem not writeable")
 )
 
 type filesystemWrapper interface {
@@ -15,21 +21,39 @@ type filesystemWrapper interface {
 }
 
 type filesystemWrapperImpl struct {
-	migrationDir string
+	migrationDir string // Optional. If not set, the filesystem is not writeable.
+	fsys         fs.FS
 }
 
 func (w *filesystemWrapperImpl) ListMigrationDir() (names []string, err error) {
-	dir, err := os.Open(w.migrationDir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	} else if err != nil {
+	dirEntries, err := fs.ReadDir(w.fsys, ".")
+	if err != nil {
 		return
 	}
-	names, err = dir.Readdirnames(0)
+
+	for _, entry := range dirEntries {
+		if !entry.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+
 	return
 }
 
+func (w *filesystemWrapperImpl) requireWriteable() error {
+	// If only w.fsys is set, this is a read-only filesystem
+	if w.migrationDir == "" {
+		return ErrFsNotWriteable
+	}
+
+	return nil
+}
+
 func (w *filesystemWrapperImpl) CreateFile(version int, name, direction string) (filePath string, err error) {
+	if err = w.requireWriteable(); err != nil {
+		return
+	}
+
 	fname := path.Join(w.migrationDir, fmt.Sprintf(filenameFmt, version, name, direction))
 
 	f, err := os.Create(fname)
@@ -45,7 +69,11 @@ func (w *filesystemWrapperImpl) CreateFile(version int, name, direction string) 
 }
 
 func (w *filesystemWrapperImpl) EnsureMigrationDir() error {
-	if stat, err := os.Stat(w.migrationDir); os.IsNotExist(err) {
+	if stat, err := fs.Stat(w.fsys, "."); errors.Is(err, fs.ErrNotExist) {
+		if err = w.requireWriteable(); err != nil {
+			return err
+		}
+
 		return os.Mkdir(w.migrationDir, os.ModeDir|0775)
 	} else if err != nil {
 		return err
@@ -59,7 +87,7 @@ func (w *filesystemWrapperImpl) EnsureMigrationDir() error {
 }
 
 func (w *filesystemWrapperImpl) ReadMigration(filename string) (sql string, err error) {
-	f, err := os.Open(path.Join(w.migrationDir, filename))
+	f, err := w.fsys.Open(filename)
 	if err != nil {
 		return
 	}

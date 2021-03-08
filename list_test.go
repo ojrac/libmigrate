@@ -32,13 +32,13 @@ func TestFilenamesToMigrations(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []migration{
-		migration{
+		{
 			Version: 1,
 			Name:    "first",
 			HasUp:   true,
 			HasDown: true,
 		},
-		migration{
+		{
 			Version: 2,
 			Name:    "second",
 			HasUp:   true,
@@ -59,13 +59,13 @@ func TestFilenamesToMigrationsMissingDown(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, []migration{
-		migration{
+		{
 			Version: 1,
 			Name:    "v1",
 			HasUp:   true,
 			HasDown: true,
 		},
-		migration{
+		{
 			Version: 2,
 			Name:    "v2",
 			HasUp:   true,
