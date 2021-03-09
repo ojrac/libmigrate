@@ -1,6 +1,8 @@
 libmigrate
 ============
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/ojrac/libmigrate.svg)](https://pkg.go.dev/github.com/ojrac/libmigrate)
+
 A library for managing and running database migrations. For a command-line tool, see:
 
 * [psql-migrate](https://github.com/ojrac/psql-migrate) for PostgreSQL
