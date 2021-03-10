@@ -72,6 +72,19 @@ func (m *migrator) listMigrations(ctx context.Context) (result []migration, err 
 	return m.filenamesToMigrations(ctx, names)
 }
 
+func checkMigrationName(m migration, filename string, isUp bool) error {
+	expectedName := m.Filename(isUp)
+	if expectedName != filename {
+		return &badMigrationFilenameError{
+			filename: filename,
+			expected: expectedName,
+		}
+	}
+
+	return nil
+
+}
+
 func (m *migrator) filenamesToMigrations(ctx context.Context, names []string) (result []migration, err error) {
 	migrationsByVersion := make(map[int]migration, len(names)/2)
 
@@ -101,12 +114,17 @@ func (m *migrator) filenamesToMigrations(ctx context.Context, names []string) (r
 		}
 
 		if m, ok := migrationsByVersion[version]; !ok {
-			migrationsByVersion[version] = migration{
+			m = migration{
 				Version: version,
 				Name:    name,
 				HasUp:   up,
 				HasDown: down,
 			}
+
+			if err := checkMigrationName(m, s, up); err != nil {
+				return nil, err
+			}
+			migrationsByVersion[version] = m
 		} else if m.Name != name {
 			var upName, downName string
 			if up {
@@ -124,6 +142,10 @@ func (m *migrator) filenamesToMigrations(ctx context.Context, names []string) (r
 			}
 			return
 		} else {
+			if err := checkMigrationName(m, s, up); err != nil {
+				return nil, err
+			}
+
 			if up {
 				m.HasUp = true
 			} else {

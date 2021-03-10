@@ -46,12 +46,17 @@ func (e *migrationNameMismatchError) DownName() string { return e.downName }
 
 type badMigrationFilenameError struct {
 	filename string
+	expected string
 	cause    error
 }
 
 func (e *badMigrationFilenameError) Error() string {
+	expected := e.expected
+	if expected == "" {
+		expected = "1234_name.up.sql"
+	}
 	return fmt.Sprintf(
-		"Bad migration filename: %s (should be 123_migration_name.sql)", e.filename)
+		"Bad migration filename: %s (should be %s)", e.filename, expected)
 }
 
 func (e *badMigrationFilenameError) BadFilename() string { return e.filename }

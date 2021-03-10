@@ -54,6 +54,18 @@ func TestFilename(t *testing.T) {
 	}
 }
 
+func TestFilenameMatchesFormat(t *testing.T) {
+	name := "01_notEnoughZeroes.up.sql"
+
+	m := &migrator{}
+	_, err := m.filenamesToMigrations(context.Background(), []string{name})
+	require.Error(t, err)
+	require.Equal(t, &badMigrationFilenameError{
+		filename: name,
+		expected: "0001_notEnoughZeroes.up.sql",
+	}, err)
+}
+
 func TestDirectoriesToMigrationsDbDisagrees(t *testing.T) {
 	db := dbMock{
 		listMigrations: func(ctx context.Context) ([]dbMigration, error) {
